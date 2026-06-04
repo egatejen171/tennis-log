@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brian's Daily Tennis Log</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1d1d1f; }
+  header { background: #1a1a2e; color: white; padding: 28px 36px; }
+  header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
+  header p  { font-size: 13px; color: #888; margin-top: 4px; }
+  /* ── Grand summary cards ── */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 24px 36px 8px; }
+  .card { background: white; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #999; margin-bottom: 6px; }
+  .card .value { font-size: 26px; font-weight: 700; }
+  .card .sub   { font-size: 11px; color: #aaa; margin-top: 3px; }
+  .card.blue   .value { color: #0f3460; }
+  .card.green  .value { color: #34c759; }
+  .card.red    .value { color: #ff3b30; }
+  .card.orange .value { color: #ff9500; }
+  /* ── Month sections ── */
+  .months { padding: 16px 36px 48px; display: flex; flex-direction: column; gap: 28px; }
+  .month-block { background: white; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .month-header {
+    background: #1a1a2e; color: white;
+    padding: 14px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+  }
+  .month-header h2 { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+  .month-header .month-pills { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+  .pill.blue   { background: rgba(15,52,96,0.8);  color: #a8d0ff; }
+  .pill.green  { background: rgba(52,199,89,0.2); color: #34c759; }
+  .pill.red    { background: rgba(255,59,48,0.2); color: #ff6b6b; }
+  .chevron { font-size: 12px; color: #888; transition: transform 0.2s; margin-left: 16px; }
+  .chevron.open { transform: rotate(180deg); }
+  /* ── Month stat bar ── */
+  .month-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0; border-bottom: 1px solid #f0f0f0;
+  }
+  .stat { padding: 12px 18px; border-right: 1px solid #f0f0f0; }
+  .stat:last-child { border-right: none; }
+  .stat .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #aaa; }
+  .stat .s-value { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .stat.pos .s-value { color: #34c759; }
+  .stat.neg .s-value { color: #ff3b30; }
+  .stat.neu .s-value { color: #0f3460; }
+  /* ── Day table ── */
+  .month-table { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th {
+    background: #f7f8fc; color: #888;
+    padding: 9px 14px; text-align: left;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #eee; white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #f5f5f5; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fafbff; }
+  td { padding: 9px 14px; white-space: nowrap; vertical-align: middle; }
+  td.date { font-weight: 600; color: #1d1d1f; }
+  td.day  { color: #888; font-size: 11px; }
+  td.num  { text-align: right; }
+  td.pos  { color: #34c759; font-weight: 600; text-align: right; }
+  td.neg  { color: #ff3b30; font-weight: 600; text-align: right; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .badge.yes-cancel { background: #ffe4e4; color: #c0392b; }
+  .badge.no-cancel  { background: #e6f9ee; color: #27ae60; }
+  .badge.yes { background: #e6f9ee; color: #27ae60; }
+  .badge.no  { background: #f5f5f7; color: #aaa; }
+  /* ── Collapsed state ── */
+  .month-body { display: block; }
+  .month-body.collapsed { display: none; }
+  @media (max-width: 600px) {
+    .summary { padding: 16px; }
+    .months  { padding: 12px 16px 32px; }
+    header   { padding: 18px 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Brian's Daily Tennis Log</h1>
+  <p id="date-range">Loading…</p>
+</header>
+<div class="summary" id="summary"></div>
+<div class="months" id="months"></div>
+<script>
+const CSV = `Timestamp,Date,Lessons,Lesson Revenue,Cancellations?,# Cancelled,Junior Clinic?,Staff Cost,Adult Clinic?,Attendees,Clinic Staff Cost,Clinic Profit
+2/14/26 7:37,2/14/26,3,250,No,,No,,No,,,
+2/19/26 2:47,2/19/26,0,,No,,Yes,107.5,Yes,4,50,30
+2/20/26 2:48,2/20/26,4,320,No,,No,,Yes,1,0,20
+2/21/26 2:49,2/21/26,1,80,No,,No,,No,0,0,0
+2/22/26 13:34,2/22/26,4,360,No,,No,,No,,,
+2/23/26 20:30,2/23/26,6.5,420,No,,Yes,0,Yes,1,50,-30
+2/24/26 18:27,2/24/26,0,0,Yes,3,No,0,No,,,
+2/25/26 16:25,2/25/26,2,180,Yes,2,Yes,0,Yes,2,50,-10
+2/26/26 20:20,2/26/26,2,170,No,,Yes,112.5,Yes,6,50,70
+2/27/26 14:41,2/27/26,4,330,Yes,1,No,0,Yes,1,50,-30
+3/1/26 16:39,3/1/26,4,250,Yes,1,No,0,No,0,0,0
+3/2/26 19:52,3/2/26,3.5,340,Yes,1,Yes,0,Yes,2,50,-10
+3/3/26 19:51,3/3/26,5,270,No,,Yes,107.5,Yes,2,50,-10
+3/4/26 19:30,3/4/26,5,350,Yes,1,Yes,0,Yes,4,50,30
+3/5/26 18:53,3/5/26,4,90,No,,Yes,107.5,Yes,4,50,30
+3/6/26 13:38,3/6/26,4.5,365,Yes,1,No,0,Yes,3,50,10
+3/7/26 12:30,3/7/26,1,80,No,,No,,No,,,
+3/8/26 12:31,3/8/26,4,310,Yes,1,No,,No,,,
+3/9/26 19:01,3/9/26,3.5,290,Yes,1,Yes,0,Yes,5,50,50
+3/10/26 19:56,3/10/26,2,80,Yes,1,Yes,150,Yes,6,0,120
+3/11/26 15:20,3/11/26,5,430,No,,Yes,0,Yes,4,50,30
+3/12/26 7:38,3/12/26,2,,Yes,3,Yes,172.5,Yes,3,50,10
+3/13/26 13:50,3/13/26,2.5,230,Yes,3,No,0,Yes,6,0,120
+3/14/26 13:51,3/14/26,0,0,No,,No,0,No,0,0,0
+3/15/26 20:36,3/15/26,4,316,No,,No,,No,,,
+3/16/26 20:37,3/16/26,2.5,260,Yes,1,Yes,0,Yes,3,50,10
+3/17/26 19:55,3/17/26,3,160,Yes,1,Yes,107.5,Yes,1,50,-30
+3/18/26 13:58,3/18/26,5,260,No,,Yes,0,Yes,4,50,30
+3/19/26 20:40,3/19/26,5,175,No,,Yes,107.5,Yes,8,50,110
+3/20/26 14:05,3/20/26,5.5,445,Yes,1,No,0,Yes,3,0,60
+3/21/26 9:33,3/21/26,0,0,,,No,0,No,0,0,0
+3/22/26 12:43,3/22/26,3,230,Yes,2,No,0,No,0,0,0
+3/23/26 21:28,3/23/26,4,410,No,,Yes,0,Yes,3,50,10
+3/24/26 1:35,3/24/26,5,370,No,,Yes,,Yes,3,50,10
+3/25/26 20:24,3/25/26,4,300,Yes,1,Yes,0,Yes,4,50,30
+3/26/26 8:52,3/26/26,0,0,Yes,4,Yes,120,Yes,3,50,10
+3/27/26 8:53,3/27/26,3,290,Yes,3,No,0,Yes,4,50,30
+3/28/26 8:54,3/28/26,0,0,No,,No,0,No,0,0,0
+3/29/26 8:54,3/29/26,0,0,No,,No,0,No,0,0,0
+3/30/26 8:56,3/30/26,0,0,No,0,No,0,No,0,0,0
+3/31/26 8:57,3/31/26,0,0,No,0,No,0,No,0,0,0
+4/1/26 8:58,4/1/26,0,0,No,,No,0,No,0,0,0
+4/2/26 8:59,4/2/26,1,95,Yes,4,Yes,115,Yes,2,50,-10
+4/3/26 8:59,4/3/26,4.5,510,Yes,3,No,0,Yes,4,50,30
+4/4/26 9:00,4/4/26,0,0,No,0,No,0,No,0,0,0
+4/5/26 9:00,4/5/26,0,0,No,,No,0,No,0,0,0
+4/6/26 20:43,4/6/26,3,150,Yes,2,Yes,0,Yes,3,50,10
+4/7/26 20:35,4/7/26,5,330,No,,Yes,107,Yes,3,50,10
+4/8/26 1:45,4/8/26,3,90,Yes,2,Yes,0,Yes,9,50,130
+4/11/26 9:38,4/11/26,0,0,No,,No,0,No,,,
+4/12/26 9:39,4/12/26,0,0,Yes,5,No,,No,,,
+4/13/26 19:55,4/13/26,2.5,235,Yes,4,Yes,0,Yes,9,50,130
+4/14/26 10:25,4/14/26,6,280,Yes,2,Yes,120,Yes,3,50,10
+4/15/26 16:58,4/15/26,2,90,Yes,3,Yes,0,Yes,5,50,50
+4/16/26 13:09,4/16/26,2,180,Yes,2,No,,Yes,1,50,-30
+4/17/26 13:10,4/17/26,4,320,Yes,2,No,0,Yes,12,50,190
+4/18/26 11:54,4/18/26,1,95,Yes,1,No,,No,,,
+4/19/26 13:05,4/19/26,2,180,Yes,3,No,,No,,,
+4/20/26 13:06,4/20/26,3,80,Yes,2,No,,Yes,3,50,10
+4/21/26 7:53,4/21/26,0,0,Yes,7,No,0,No,0,0,0
+4/22/26 7:54,4/22/26,0,0,Yes,5,No,0,No,0,0,0
+4/23/26 7:54,4/23/26,1,95,Yes,4,Yes,0,Yes,3,0,60
+4/24/26 7:57,4/24/26,4.5,440,Yes,2,No,0,Yes,3,0,60
+4/25/26 7:57,4/25/26,0,0,No,,No,,,No,,,
+4/26/26 7:58,4/26/26,0,0,Yes,7,No,,,No,,,
+4/27/26 20:10,4/27/26,3.5,325,No,,Yes,0,Yes,6,50,70
+4/28/26 6:34,4/28/26,4,240,No,,Yes,108,Yes,3,50,10
+4/29/26 21:07,4/29/26,5,250,Yes,1,Yes,0,Yes,7,50,90
+4/30/26 19:15,4/30/26,6,345,No,,Yes,115,Yes,3,50,10
+5/1/26 19:15,5/1/26,1,80,Yes,4,No,,Yes,4,50,30
+5/2/26 19:19,5/2/26,0,,No,,No,,No,,,
+5/3/26 19:19,5/3/26,0,,No,,No,0,No,,,
+5/4/26 19:20,5/4/26,4,0,Yes,5,No,,No,,,
+5/5/26 19:22,5/5/26,2,165,Yes,4,Yes,115,Yes,5,50,50
+5/6/26 19:22,5/6/26,7,420,Yes,1,Yes,0,Yes,5,50,50
+5/9/26 6:03,5/9/26,2,175,No,,No,,No,,,
+5/10/26 6:03,5/10/26,0,,Yes,5,No,,No,,,
+5/11/26 6:05,5/11/26,5.5,260,No,,Yes,0,Yes,7,50,90
+5/12/26 6:06,5/12/26,2,160,Yes,3,Yes,115,Yes,3,50,10
+5/14/26 4:20,5/14/26,0,0,Yes,3,Yes,0,Yes,4,50,30
+5/15/26 4:21,5/15/26,4,320,Yes,2,No,0,Yes,6,50,70
+5/16/26 4:21,5/16/26,0,0,No,,No,0,No,0,0,0
+5/17/26 4:22,5/17/26,6,400,Yes,1,No,,No,,,
+5/18/26 4:24,5/18/26,5,260,No,,Yes,0,Yes,4,50,30
+5/19/26 4:28,5/19/26,5,320,No,,Yes,115,Yes,4,50,30
+5/20/26 4:29,5/20/26,4,320,Yes,2,Yes,0,Yes,4,50,30
+5/21/26 4:30,5/21/26,1,80,Yes,4,Yes,115,Yes,3,50,10
+5/22/26 4:31,5/22/26,2,160,Yes,4,No,,Yes,5,50,50
+5/23/26 4:32,5/23/26,3,270,No,,No,,No,,,
+5/24/26 4:33,5/24/26,4,320,Yes,2,No,0,No,,,
+5/25/26 4:35,5/25/26,4.5,400,Yes,1,Yes,,Yes,3,50,10
+5/26/26 4:36,5/26/26,3,240,Yes,3,Yes,,Yes,2,50,-10
+5/27/26 4:37,5/27/26,5,350,Yes,1,Yes,,Yes,3,50,10
+5/28/26 4:39,5/28/26,0,0,Yes,4,Yes,115,Yes,6,50,70
+5/29/26 4:40,5/29/26,1.5,180,Yes,4,No,,Yes,2,,40
+5/30/26 4:41,5/30/26,4,320,No,,No,,No,,,
+5/31/26 4:42,5/31/26,4,310,Yes,3,No,,No,,,
+6/1/26 6:04,6/1/26,4.5,460,Yes,1,Yes,0,Yes,4,50,30`;
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function n(v) { return isNaN(parseFloat(v)) ? 0 : parseFloat(v); }
+function fmt$(v) { return v === 0 ? '—' : '$' + v.toLocaleString(); }
+function fmtN(v) { return v === 0 ? '—' : v.toLocaleString(); }
+function parseRows() {
+  const lines = CSV.trim().split('\n').slice(1);
+  const seen  = {};
+  lines.forEach(line => {
+    const c = line.split(',');
+    const dateStr = c[1]?.trim();
+    if (!dateStr) return;
+    seen[dateStr] = {
+      date:        dateStr,
+      dateObj:     new Date(dateStr),
+      lessons:     n(c[2]),
+      lessonRev:   n(c[3]),
+      cancelled:   c[4]?.trim().toLowerCase() === 'yes',
+      cancelCount: n(c[5]),
+      junior:      c[6]?.trim().toLowerCase() === 'yes',
+      staffCost:   n(c[7]),
+      adult:       c[8]?.trim().toLowerCase() === 'yes',
+      attendees:   n(c[9]),
+      clinicStaff: n(c[10]),
+      clinicProfit:n(c[11]),
+    };
+  });
+  return Object.values(seen)
+    .filter(r => !isNaN(r.dateObj))
+    .sort((a,b) => a.dateObj - b.dateObj);
+}
+function groupByMonth(rows) {
+  const groups = {};
+  const order  = [];
+  rows.forEach(r => {
+    const key = r.dateObj.getFullYear() + '-' + r.dateObj.getMonth();
+    if (!groups[key]) {
+      groups[key] = {
+        label: MONTHS[r.dateObj.getMonth()] + ' ' + r.dateObj.getFullYear(),
+        rows: []
+      };
+      order.push(key);
+    }
+    groups[key].rows.push(r);
+  });
+  return order.map(k => groups[k]);
+}
+function monthTotals(rows) {
+  return {
+    lessons:     rows.reduce((s,r) => s + r.lessons, 0),
+    lessonRev:   rows.reduce((s,r) => s + r.lessonRev, 0),
+    cancelCount: rows.reduce((s,r) => s + r.cancelCount, 0),
+    attendees:   rows.reduce((s,r) => s + r.attendees, 0),
+    clinicIncome:rows.reduce((s,r) => s + r.attendees * 20, 0),
+    clinicProfit:rows.reduce((s,r) => s + r.clinicProfit, 0),
+    staffCost:   rows.reduce((s,r) => s + r.staffCost, 0),
+  };
+}
+function renderSummaryCards(allRows) {
+  const t = monthTotals(allRows);
+  const dates = allRows.map(r => r.dateObj);
+  const minD  = new Date(Math.min(...dates)).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const maxD  = new Date(Math.max(...dates)).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('date-range').textContent = minD + ' – ' + maxD;
+  document.getElementById('summary').innerHTML = `
+    <div class="card blue"><div class="label">Lesson Revenue</div><div class="value">$${t.lessonRev.toLocaleString()}</div><div class="sub">${t.lessons} lessons</div></div>
+    <div class="card green"><div class="label">Clinic Income</div><div class="value">$${t.clinicIncome.toLocaleString()}</div><div class="sub">${t.attendees} attendees</div></div>
+    <div class="card ${t.clinicProfit >= 0 ? 'green' : 'red'}"><div class="label">Clinic Profit</div><div class="value">$${t.clinicProfit.toLocaleString()}</div><div class="sub">after staff costs</div></div>
+    <div class="card orange"><div class="label">Cancellations</div><div class="value">${t.cancelCount}</div><div class="sub">${allRows.filter(r=>r.cancelled).length} days affected</div></div>
+    <div class="card"><div class="label">Staff Cost</div><div class="value">$${t.staffCost.toLocaleString()}</div><div class="sub">${allRows.length} days logged</div></div>
+  `;
+}
+function renderMonths(groups) {
+  const container = document.getElementById('months');
+  container.innerHTML = groups.map((g, gi) => {
+    const t = monthTotals(g.rows);
+    const profitClass = t.clinicProfit >= 0 ? 'pos' : 'neg';
+    const rows = g.rows.map(r => {
+      const clinicIncome = r.attendees * 20;
+      const pc = r.clinicProfit > 0 ? 'pos' : r.clinicProfit < 0 ? 'neg' : 'num';
+      return `<tr>
+        <td class="date">${r.date}</td>
+        <td class="day">${DAYS[r.dateObj.getDay()]}</td>
+        <td class="num">${r.lessons || '—'}</td>
+        <td class="num">${r.lessonRev ? '$'+r.lessonRev.toLocaleString() : '—'}</td>
+        <td>${r.cancelled ? `<span class="badge yes-cancel">${r.cancelCount} cancelled</span>` : '<span class="badge no-cancel">None</span>'}</td>
+        <td><span class="badge ${r.junior ? 'yes' : 'no'}">${r.junior ? 'Yes' : 'No'}</span></td>
+        <td class="num">${r.staffCost ? '$'+r.staffCost : '—'}</td>
+        <td><span class="badge ${r.adult ? 'yes' : 'no'}">${r.adult ? 'Yes' : 'No'}</span></td>
+        <td class="num">${r.attendees || '—'}</td>
+        <td class="num">${clinicIncome ? '$'+clinicIncome : '—'}</td>
+        <td class="${pc}">${r.clinicProfit !== 0 ? '$'+r.clinicProfit : '—'}</td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="month-block">
+      <div class="month-header" onclick="toggle(${gi})">
+        <h2>📅 ${g.label}</h2>
+        <div class="month-pills">
+          <span class="pill blue">${t.lessons} lessons &nbsp;·&nbsp; $${t.lessonRev.toLocaleString()}</span>
+          <span class="pill ${t.clinicProfit >= 0 ? 'green' : 'red'}">${t.clinicProfit >= 0 ? '+' : ''}$${t.clinicProfit.toLocaleString()} clinic profit</span>
+          ${t.cancelCount ? `<span class="pill red">${t.cancelCount} cancellations</span>` : ''}
+        </div>
+        <span class="chevron open" id="chev-${gi}">▼</span>
+      </div>
+      <div class="month-stats">
+        <div class="stat neu"><div class="s-label">Lessons</div><div class="s-value">${t.lessons}</div></div>
+        <div class="stat neu"><div class="s-label">Lesson Revenue</div><div class="s-value">$${t.lessonRev.toLocaleString()}</div></div>
+        <div class="stat neu"><div class="s-label">Attendees</div><div class="s-value">${t.attendees}</div></div>
+        <div class="stat neu"><div class="s-label">Clinic Income</div><div class="s-value">$${t.clinicIncome.toLocaleString()}</div></div>
+        <div class="stat ${profitClass}"><div class="s-label">Clinic Profit</div><div class="s-value">$${t.clinicProfit.toLocaleString()}</div></div>
+        <div class="stat neu"><div class="s-label">Cancellations</div><div class="s-value">${t.cancelCount || '—'}</div></div>
+        <div class="stat neu"><div class="s-label">Staff Cost</div><div class="s-value">$${t.staffCost.toLocaleString()}</div></div>
+      </div>
+      <div class="month-body" id="body-${gi}">
+        <div class="month-table">
+          <table>
+            <thead><tr>
+              <th>Date</th><th>Day</th><th>Lessons</th><th>Revenue</th>
+              <th>Cancellations</th><th>Junior Clinic</th><th>Staff Cost</th>
+              <th>Adult Clinic</th><th>Attendees</th><th>Clinic Income</th><th>Clinic Profit</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggle(i) {
+  const body = document.getElementById('body-' + i);
+  const chev = document.getElementById('chev-' + i);
+  body.classList.toggle('collapsed');
+  chev.classList.toggle('open');
+}
+const allRows = parseRows();
+const groups  = groupByMonth(allRows);
+renderSummaryCards(allRows);
+renderMonths(groups);
+</script>
+</body>
+</html>
